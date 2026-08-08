@@ -1,0 +1,258 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+}
+
+enum ConversationStatus {
+  OPEN
+  CLOSED
+}
+
+enum MessageStatus {
+  SENT
+  DELIVERED
+  READ
+  DELETED
+}
+
+enum SessionStatus {
+  ACTIVE
+  REVOKED
+  EXPIRED
+  COMPROMISED
+}
+
+enum RefreshTokenStatus {
+  ACTIVE
+  ROTATED
+  REVOKED
+  REUSED
+  EXPIRED
+}
+
+enum AuditAction {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  REFRESH_SUCCESS
+  REFRESH_FAILED
+  REFRESH_REUSE_DETECTED
+  SESSION_CREATED
+  SESSION_REVOKED
+  PASSWORD_CHANGED
+  ROLE_CREATED
+  ROLE_UPDATED
+  ROLE_ASSIGNED
+  ROLE_REMOVED
+  ROLE_PERMISSIONS_REPLACED
+}
+
+model User {
+  id                String      @id @default(uuid()) @db.Uuid
+  email             String      @unique @db.VarChar(320)
+  username          String      @unique @db.VarChar(50)
+  passwordHash      String      @db.VarChar(255)
+  status            UserStatus  @default(ACTIVE)
+  emailVerified     Boolean     @default(false)
+  passwordChangedAt DateTime?
+  deletedAt         DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  sessions          Session[]
+  refreshTokens     RefreshToken[]
+  auditLogs         AuditLog[]
+
+  conversationsCreated   Conversation[] @relation("ConversationCreator")
+  conversationParticipants ConversationParticipant[]
+  messages               Message[]
+
+  @@index([status])
+  @@index([deletedAt])
+  @@map("users")
+  userRoles UserRole[]
+}
+
+model Conversation {
+  id          String             @id @default(uuid()) @db.Uuid
+  createdById String             @db.Uuid
+  status      ConversationStatus @default(OPEN)
+  subject     String?            @db.VarChar(255)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  closedAt    DateTime?
+
+  createdBy    User                     @relation("ConversationCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([createdById])
+  @@index([status])
+  @@index([updatedAt])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  conversationId String   @db.Uuid
+  userId         String   @db.Uuid
+  joinedAt       DateTime @default(now())
+  leftAt         DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String        @id @default(uuid()) @db.Uuid
+  conversationId String        @db.Uuid
+  senderId       String        @db.Uuid
+  body           String        @db.Text
+  status         MessageStatus @default(SENT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  deletedAt      DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation(fields: [senderId], references: [id], onDelete: Restrict)
+
+  @@index([conversationId, createdAt])
+  @@index([senderId])
+  @@index([status])
+  @@map("messages")
+}
+
+model Session {
+  id          String        @id @default(uuid()) @db.Uuid
+  userId      String        @db.Uuid
+  status      SessionStatus @default(ACTIVE)
+  ipAddress   String?       @db.VarChar(45)
+  userAgent   String?       @db.VarChar(1000)
+  expiresAt   DateTime
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+
+  @@index([userId, status])
+  @@index([expiresAt])
+  @@map("sessions")
+}
+
+model RefreshToken {
+  id            String             @id @default(uuid()) @db.Uuid
+  userId        String             @db.Uuid
+  sessionId     String             @db.Uuid
+  jti           String             @unique @db.VarChar(128)
+  tokenHash     String             @db.VarChar(255)
+  status        RefreshTokenStatus @default(ACTIVE)
+  expiresAt     DateTime
+  createdAt     DateTime            @default(now())
+  usedAt        DateTime?
+  revokedAt     DateTime?
+  revokedReason String?             @db.VarChar(100)
+  replacedByJti String?             @db.VarChar(128)
+  ipAddress     String?             @db.VarChar(45)
+  userAgent     String?             @db.VarChar(1000)
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([sessionId, status])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model AuditLog {
+  id        String      @id @default(uuid()) @db.Uuid
+  userId    String?     @db.Uuid
+  action    AuditAction
+  sessionId String?     @db.Uuid
+  jti       String?     @db.VarChar(128)
+  ipAddress String?     @db.VarChar(45)
+  userAgent String?     @db.VarChar(1000)
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
+  @@index([jti])
+  @@map("audit_logs")
+}
+
+
+// ============================================================================
+// Authorization / RBAC
+// ============================================================================
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  permissions RolePermission[]
+  userRoles   UserRole[]
+
+  @@index([name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  description String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  roles RolePermission[]
+
+  @@index([name])
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  userId    String   @db.Uuid
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}

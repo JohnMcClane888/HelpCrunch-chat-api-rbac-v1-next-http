@@ -1,0 +1,2 @@
+export const SESSION_DEFAULT_TTL_DAYS = 30;
+export const MAX_ACTIVE_SESSIONS = 10;
