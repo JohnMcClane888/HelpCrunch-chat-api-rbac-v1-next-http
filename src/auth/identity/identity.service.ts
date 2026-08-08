@@ -28,26 +28,24 @@ export class IdentityService {
   }
 
   async validateRefreshUser(
-    payload: RefreshTokenPayload,
-    refreshToken: string,
-    _ip?: string,
-    _userAgent?: string,
-  ): Promise<AuthenticatedUser> {
-    await this.refreshTokens.verifyStoredToken(
-      refreshToken,
-      payload.jti,
-      payload.sessionId,
-    );
+  payload: RefreshTokenPayload,
+  refreshToken: string,
+): Promise<AuthenticatedUser> {
+  await this.refreshTokens.verifyStoredToken(
+    refreshToken,
+    payload.jti,
+    payload.sessionId,
+  );
 
     const user = await this.users.findById(payload.sub);
 
     return this.toAuthenticatedUser(
-      user,
-      payload.sessionId,
-      payload.jti,
-      payload.iat,
-    );
-  }
+    user,
+    payload.sessionId,
+    payload.jti,
+    payload.iat,
+  );
+}
 
   private async toAuthenticatedUser(
     user: Awaited<ReturnType<UserService['findById']>>,

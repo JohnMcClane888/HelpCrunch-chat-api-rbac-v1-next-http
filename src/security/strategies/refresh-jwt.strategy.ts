@@ -58,13 +58,11 @@ export class RefreshJwtStrategy extends PassportStrategy(
       throw new UnauthorizedException('Refresh token not found');
     }
 
-    const userAgent = request.headers['user-agent'];
+    
 
     return this.identityService.validateRefreshUser(
-      payload,
-      refreshToken,
-      request.ip,
-      Array.isArray(userAgent) ? userAgent[0] : userAgent,
-    );
+  payload,
+  refreshToken,
+);
   }
 }
