@@ -6,11 +6,11 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-ParseUUIDPipe,
-Patch,
-Post,
-Query,
-UseGuards,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../security/guards/jwt-auth.guard';
@@ -25,7 +25,6 @@ import { CurrentUser } from '../security/decorators/current-user.decorator';
 import { AuthenticatedUser } from '../security/interfaces/authenticated-user.interface';
 
 import { ChatService } from './chat.service';
-
 
 import {
   AddParticipantDto,
@@ -64,20 +63,21 @@ export class ChatController {
 
 
 
+
   @Get('conversations')
-@UseGuards(PermissionsGuard)
-@Permissions(Permission.CHAT_READ)
-listConversations(
-  @CurrentUser() user: AuthenticatedUser,
-  @Query() pagination: PaginationDto,
-) {
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CHAT_READ)
+  listConversations(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() pagination: PaginationDto,
+  ) {
 
-  return this.chat.listConversations(
-    user.id,
-    pagination,
-  );
+    return this.chat.listConversations(
+      user.id,
+      pagination,
+    );
 
-}
+  }
 
 
 
@@ -137,7 +137,6 @@ listConversations(
 
 
 
-
   @Post('conversations/:conversationId/messages')
   @UseGuards(PermissionsGuard)
   @Permissions(Permission.CHAT_CREATE)
@@ -167,6 +166,35 @@ listConversations(
 
 
 
+  // NEW: отримання повідомлень з pagination
+
+  @Get('conversations/:conversationId/messages')
+  @UseGuards(PermissionsGuard)
+  @Permissions(Permission.CHAT_READ)
+  listMessages(
+    @CurrentUser() user: AuthenticatedUser,
+
+    @Param(
+      'conversationId',
+      new ParseUUIDPipe(),
+    )
+    conversationId: string,
+
+    @Query()
+    pagination: PaginationDto,
+
+  ) {
+
+    return this.chat.listMessages(
+      user.id,
+      conversationId,
+      pagination,
+    );
+
+  }
+
+
+
 
 
   @Patch('conversations/:conversationId/close')
@@ -192,9 +220,6 @@ listConversations(
     );
 
   }
-
-
-
 
 
 
@@ -234,8 +259,6 @@ listConversations(
 
 
 
-
-
   @Delete('conversations/:conversationId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(
@@ -254,12 +277,10 @@ listConversations(
 
   ): Promise<void> {
 
-
     await this.chat.deleteConversation(
       user.id,
       conversationId,
     );
-
 
   }
 
