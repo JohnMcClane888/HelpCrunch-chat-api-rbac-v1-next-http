@@ -6,10 +6,11 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseUUIDPipe,
-  Patch,
-  Post,
-  UseGuards,
+ParseUUIDPipe,
+Patch,
+Post,
+Query,
+UseGuards,
 } from '@nestjs/common';
 
 import { JwtAuthGuard } from '../security/guards/jwt-auth.guard';
@@ -25,10 +26,12 @@ import { AuthenticatedUser } from '../security/interfaces/authenticated-user.int
 
 import { ChatService } from './chat.service';
 
+
 import {
   AddParticipantDto,
   CreateConversationDto,
   CreateMessageDto,
+  PaginationDto,
 } from './dto';
 
 
@@ -62,17 +65,19 @@ export class ChatController {
 
 
   @Get('conversations')
-  @UseGuards(PermissionsGuard)
-  @Permissions(Permission.CHAT_READ)
-  listConversations(
-    @CurrentUser() user: AuthenticatedUser,
-  ) {
+@UseGuards(PermissionsGuard)
+@Permissions(Permission.CHAT_READ)
+listConversations(
+  @CurrentUser() user: AuthenticatedUser,
+  @Query() pagination: PaginationDto,
+) {
 
-    return this.chat.listConversations(
-      user.id,
-    );
+  return this.chat.listConversations(
+    user.id,
+    pagination,
+  );
 
-  }
+}
 
 
 
