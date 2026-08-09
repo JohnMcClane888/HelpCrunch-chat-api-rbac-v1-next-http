@@ -1,159 +1,162 @@
-import { Injectable } from '@nestjs/common';
-import { ConversationStatus, MessageStatus, Prisma } from '@prisma/client';
+import { Injectable } from "@nestjs/common";
 
-import { PrismaService } from '../../prisma/prisma.service';
-
-const participantSelect = {
-  userId: true,
-  joinedAt: true,
-  leftAt: true,
-  user: {
-    select: {
-      id: true,
-      email: true,
-      username: true,
-    },
-  },
-} satisfies Prisma.ConversationParticipantSelect;
-
-const messageSelect = {
-  id: true,
-  conversationId: true,
-  senderId: true,
-  body: true,
-  status: true,
-  createdAt: true,
-  updatedAt: true,
-  deletedAt: true,
-  sender: {
-    select: {
-      id: true,
-      email: true,
-      username: true,
-    },
-  },
-} satisfies Prisma.MessageSelect;
-
-const conversationInclude = {
-  participants: {
-    orderBy: { joinedAt: 'asc' as const },
-    select: participantSelect,
-  },
-  messages: {
-    orderBy: { createdAt: 'asc' as const },
-    take: 100,
-    select: messageSelect,
-  },
-} satisfies Prisma.ConversationInclude;
+import { PrismaService } from "../../prisma/prisma.service";
 
 @Injectable()
 export class ChatRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  createConversation(
-    createdById: string,
-    subject?: string,
-  ) {
+  async createConversation(userId: string, subject: string) {
     return this.prisma.conversation.create({
       data: {
-        createdById,
         subject,
+
+        createdById: userId,
+
         participants: {
-          create: { userId: createdById },
+          create: {
+            userId,
+          },
         },
       },
-      include: conversationInclude,
     });
   }
 
-  findConversation(id: string) {
+  async findConversation(conversationId: string) {
     return this.prisma.conversation.findUnique({
-      where: { id },
-      include: conversationInclude,
+      where: {
+        id: conversationId,
+      },
+
+      include: {
+        participants: true,
+      },
     });
   }
 
-  listConversationsForUser(userId: string) {
+  async listAllConversations() {
+    return this.prisma.conversation.findMany({
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  }
+
+  async listConversationsForUser(
+    userId: string,
+    pagination?: {
+      skip: number;
+      take: number;
+    },
+  ) {
     return this.prisma.conversation.findMany({
       where: {
-        OR: [
-          { createdById: userId },
-          { participants: { some: { userId, leftAt: null } } },
-        ],
+        participants: {
+          some: {
+            userId,
+          },
+        },
       },
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-      include: conversationInclude,
+
+      skip: pagination?.skip,
+
+      take: pagination?.take,
+
+      orderBy: {
+        createdAt: "desc",
+      },
     });
   }
 
-  listAllConversations() {
-    return this.prisma.conversation.findMany({
-      orderBy: { updatedAt: 'desc' },
-      take: 100,
-      include: conversationInclude,
-    });
-  }
-
-  async isActiveParticipant(conversationId: string, userId: string): Promise<boolean> {
-    const participant = await this.prisma.conversationParticipant.findUnique({
+  async countConversationsForUser(userId: string) {
+    return this.prisma.conversation.count({
       where: {
-        conversationId_userId: { conversationId, userId },
+        participants: {
+          some: {
+            userId,
+          },
+        },
       },
-      select: { leftAt: true },
     });
-
-    return participant?.leftAt === null;
   }
 
-  async isCreator(conversationId: string, userId: string): Promise<boolean> {
+  async isActiveParticipant(userId: string, conversationId: string) {
+    const participant = await this.prisma.conversationParticipant.findFirst({
+      where: {
+        conversationId,
+
+        userId,
+      },
+    });
+
+    return !!participant;
+  }
+
+  async isCreator(userId: string, conversationId: string) {
     const conversation = await this.prisma.conversation.findUnique({
-      where: { id: conversationId },
-      select: { createdById: true },
+      where: {
+        id: conversationId,
+      },
+
+      select: {
+        createdById: true,
+      },
     });
 
     return conversation?.createdById === userId;
   }
 
   async addParticipant(conversationId: string, userId: string) {
-    return this.prisma.conversationParticipant.upsert({
-      where: {
-        conversationId_userId: { conversationId, userId },
+    return this.prisma.conversationParticipant.create({
+      data: {
+        conversationId,
+
+        userId,
       },
-      create: { conversationId, userId },
-      update: { leftAt: null },
-      select: participantSelect,
     });
   }
 
   async closeConversation(conversationId: string) {
     return this.prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        status: ConversationStatus.CLOSED,
-        closedAt: new Date(),
+      where: {
+        id: conversationId,
       },
-      include: conversationInclude,
+
+      data: {
+        status: "CLOSED",
+      },
     });
   }
 
-  async deleteConversation(conversationId: string): Promise<void> {
-    await this.prisma.conversation.delete({ where: { id: conversationId } });
+  async deleteConversation(conversationId: string) {
+    await this.prisma.conversation.delete({
+      where: {
+        id: conversationId,
+      },
+    });
   }
 
-  async createMessage(
-    conversationId: string,
-    senderId: string,
-    body: string,
-  ) {
+  async updateConversation(conversationId: string, subject: string) {
+    return this.prisma.conversation.update({
+      where: {
+        id: conversationId,
+      },
+
+      data: {
+        subject,
+      },
+    });
+  }
+
+  async createMessage(conversationId: string, userId: string, body: string) {
     return this.prisma.message.create({
       data: {
         conversationId,
-        senderId,
+
+        senderId: userId,
+
         body,
-        status: MessageStatus.SENT,
       },
-      select: messageSelect,
     });
   }
 }
