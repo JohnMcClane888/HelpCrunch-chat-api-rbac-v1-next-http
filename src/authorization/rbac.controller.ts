@@ -16,14 +16,30 @@ import { CurrentUser } from '../security/decorators/current-user.decorator';
 @Controller('authorization')
 @UseGuards(AuthGuard('jwt'))
 export class RbacController {
-  constructor(private readonly authorization: AuthorizationService) {}
 
-  @Get('me/permissions')
-  async getMyPermissions(@CurrentUser() user: AuthenticatedUser) {
-    return {
-      userId: user.id,
-      roles: user.roles,
-      permissions: await this.authorization.listUserPermissions(user.id),
-    };
-  }
+constructor(
+  private readonly authorization: AuthorizationService
+){}
+
+
+@Get('me/permissions')
+async getMyPermissions(
+ @CurrentUser() user: AuthenticatedUser
+){
+
+ return {
+
+   userId:user.id,
+
+   roles:user.roles,
+
+   permissions:
+     await this.authorization.listUserPermissions(
+       user.id
+     )
+
+ };
+
+}
+
 }
