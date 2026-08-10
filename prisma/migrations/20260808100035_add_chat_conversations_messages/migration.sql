@@ -1,3 +1,9 @@
+-- CreateEnum
+CREATE TYPE "ConversationStatus" AS ENUM ('OPEN', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "MessageStatus" AS ENUM ('SENT', 'DELIVERED', 'READ', 'DELETED');
+
 
 -- AlterTable
 ALTER TABLE "audit_logs" ALTER COLUMN "sessionId" SET DATA TYPE TEXT;
