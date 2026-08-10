@@ -84,6 +84,7 @@ model User {
   userRoles                UserRole[]
 
   emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
 
   @@index([status])
   @@index([deletedAt])
@@ -107,6 +108,25 @@ model EmailVerificationToken {
   @@index([userId])
   @@index([expiresAt])
   @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id String @id @default(uuid()) @db.Uuid
+
+  userId String @db.Uuid
+
+  tokenHash String @unique @db.VarChar(255)
+
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
 }
 
 // ============================================================================
@@ -309,8 +329,7 @@ model RolePermission {
 
   createdAt DateTime @default(now())
 
-  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
-
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
 
   @@id([roleId, permissionId])
@@ -319,13 +338,12 @@ model RolePermission {
 }
 
 model UserRole {
-  userId String @db.Uuid
+  userId String
   roleId String
 
   createdAt DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
   role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
 
   @@id([userId, roleId])
