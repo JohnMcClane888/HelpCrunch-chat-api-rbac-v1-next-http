@@ -1,3 +1,9 @@
+-- CreateEnum
+CREATE TYPE "ConversationStatus" AS ENUM ('OPEN', 'CLOSED');
+
+-- CreateEnum
+CREATE TYPE "MessageStatus" AS ENUM ('SENT', 'DELIVERED', 'READ', 'DELETED');
+
 
 -- AlterTable
 ALTER TABLE "audit_logs" ALTER COLUMN "sessionId" SET DATA TYPE TEXT;
@@ -62,14 +68,7 @@ CREATE INDEX "messages_senderId_idx" ON "messages"("senderId");
 -- CreateIndex
 CREATE INDEX "messages_status_idx" ON "messages"("status");
 
--- CreateIndex
-CREATE INDEX "message_read_receipts_messageId_idx" ON "message_read_receipts"("messageId");
 
--- CreateIndex
-CREATE INDEX "message_read_receipts_userId_idx" ON "message_read_receipts"("userId");
-
--- CreateIndex
-CREATE UNIQUE INDEX "message_read_receipts_messageId_userId_key" ON "message_read_receipts"("messageId", "userId");
 
 -- AddForeignKey
 ALTER TABLE "conversations" ADD CONSTRAINT "conversations_createdById_fkey" FOREIGN KEY ("createdById") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -86,8 +85,3 @@ ALTER TABLE "messages" ADD CONSTRAINT "messages_conversationId_fkey" FOREIGN KEY
 -- AddForeignKey
 ALTER TABLE "messages" ADD CONSTRAINT "messages_senderId_fkey" FOREIGN KEY ("senderId") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "message_read_receipts" ADD CONSTRAINT "message_read_receipts_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "messages"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "message_read_receipts" ADD CONSTRAINT "message_read_receipts_userId_fkey" FOREIGN KEY ("userId") REFERENCES "users"("id") ON DELETE CASCADE ON UPDATE CASCADE;
