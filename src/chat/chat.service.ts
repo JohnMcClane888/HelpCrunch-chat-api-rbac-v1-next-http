@@ -2,7 +2,10 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Inject,
 } from '@nestjs/common';
+
+import { CHAT_REPOSITORY } from './chat.constants';
 
 import { Permission } from '../authorization/enums/permission.enum';
 import { AuthorizationService } from '../authorization/authorization.service';
@@ -13,7 +16,6 @@ import { PaginationDto } from './dto';
 
 export interface ChatRepository {
 
-
   createConversation(
     userId: string,
     subject: string,
@@ -23,7 +25,7 @@ export interface ChatRepository {
 
   findConversation(
     conversationId: string,
-  ): Promise<any>;
+  ): Promise<any | null>;
 
 
 
@@ -92,7 +94,7 @@ export interface ChatRepository {
 
   deleteConversation(
     conversationId: string,
-  ): Promise<void>;
+  ): Promise<any>;
 
 
 
@@ -111,20 +113,26 @@ export interface ChatRepository {
 
 
 
+  markMessageAsRead(
+    messageId: string,
+    userId: string,
+  ): Promise<any>;
+
 }
+
+
 
 
 
 @Injectable()
 export class ChatService {
 
-
   constructor(
+    @Inject(CHAT_REPOSITORY)
     private readonly chats: ChatRepository,
+
     private readonly authorization: AuthorizationService,
   ) {}
-
-
 
 
 
@@ -133,18 +141,12 @@ export class ChatService {
     subject: string,
   ) {
 
-
     return this.chats.createConversation(
       userId,
       subject.trim(),
     );
 
-
   }
-
-
-
-
 
 
 
@@ -153,8 +155,7 @@ export class ChatService {
     conversationId: string,
   ) {
 
-
-    const isAdmin =
+    const admin =
       await this.authorization.hasAnyUserRole(
         userId,
         [
@@ -174,14 +175,15 @@ export class ChatService {
 
     if (!conversation) {
 
-      throw new ForbiddenException();
+      throw new BadRequestException(
+        'Conversation not found',
+      );
 
     }
 
 
 
-    if (!isAdmin) {
-
+    if (!admin) {
 
       const participant =
         await this.chats.isActiveParticipant(
@@ -196,444 +198,303 @@ export class ChatService {
         throw new ForbiddenException();
 
       }
-
 
     }
 
 
 
     return conversation;
+}
+     async sendMessage(
+  userId: string,
+  conversationId: string,
+  body: string,
+) {
+  const conversation =
+    await this.chats.findConversation(
+      conversationId,
+    );
+    
 
-
+  if (
+    !conversation ||
+    conversation.status === 'CLOSED'
+  ) {
+    throw new BadRequestException(
+      'Conversation closed',
+    );
   }
 
-
-
-
-
-
-
-
-  async sendMessage(
-    userId: string,
-    conversationId: string,
-    body: string,
-  ) {
-
-
-
-    const conversation =
-      await this.chats.findConversation(
-        conversationId,
-      );
-
-
-
-    if (
-      !conversation ||
-      conversation.status === 'CLOSED'
-    ) {
-
-      throw new BadRequestException();
-
-    }
-
-
-
-
-
-
-    const allowed =
-      await this.authorization.hasAnyUserRole(
-        userId,
-        [
-          'ADMIN',
-          'AGENT',
-        ],
-      );
-
-
-
-
-
-    if (!allowed) {
-
-
-      const participant =
-        await this.chats.isActiveParticipant(
-          userId,
-          conversationId,
-        );
-
-
-
-      if (!participant) {
-
-        throw new ForbiddenException();
-
-      }
-
-
-    }
-
-
-
-
-
-    return this.chats.createMessage(
-      conversationId,
+  const admin =
+    await this.authorization.hasAnyUserRole(
       userId,
-      body,
+      [
+        'ADMIN',
+        'AGENT',
+      ],
+    );
+
+  if (!admin) {
+    const participant =
+      await this.chats.isActiveParticipant(
+        userId,
+        conversationId,
+      );
+
+    if (!participant) {
+      throw new ForbiddenException();
+    }
+  }
+
+  return this.chats.createMessage(
+    conversationId,
+    userId,
+    body.trim(),
+  );
+}
+
+
+
+
+
+async listMessages(
+  userId: string,
+  conversationId: string,
+  pagination?: PaginationDto,
+) {
+  const conversation =
+    await this.chats.findConversation(
+      conversationId,
+    );
+
+  if (!conversation) {
+    throw new BadRequestException(
+      'Conversation not found',
+    );
+  }
+
+
+  const admin =
+    await this.authorization.hasAnyUserRole(
+      userId,
+      [
+        'ADMIN',
+        'AGENT',
+      ],
     );
 
 
-  }
-
-
-
-
-
-
-
-
-
-  async listMessages(
-    userId: string,
-    conversationId: string,
-    pagination?: PaginationDto,
-  ) {
-
-
-    const allowed =
-      await this.authorization.hasAnyUserRole(
-        userId,
-        [
-          'ADMIN',
-          'AGENT',
-        ],
-      );
-
-
-
-    if (!allowed) {
-
-
-      const participant =
-        await this.chats.isActiveParticipant(
-          userId,
-          conversationId,
-        );
-
-
-
-      if (!participant) {
-
-        throw new ForbiddenException();
-
-      }
-
-
-    }
-
-
-
-
-
-    const page =
-      pagination?.page ?? 1;
-
-
-
-    const limit =
-      pagination?.limit ?? 20;
-
-
-
-    const skip =
-      (page - 1) * limit;
-
-
-
-
-
-    const items =
-      await this.chats.listMessages(
-        conversationId,
-        {
-          skip,
-          take: limit,
-        },
-      );
-
-
-
-
-
-    const total =
-      await this.chats.countMessages(
-        conversationId,
-      );
-
-
-
-
-
-
-    return {
-
-      items,
-
-      page,
-
-      limit,
-
-      total,
-
-      pages:
-        Math.ceil(total / limit),
-
-    };
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async closeConversation(
-    userId: string,
-    conversationId: string,
-  ) {
-
-
-
-    const owner =
-      await this.chats.isCreator(
+  if (!admin) {
+    const participant =
+      await this.chats.isActiveParticipant(
         userId,
         conversationId,
       );
 
 
-
-    if (!owner) {
-
+    if (!participant) {
       throw new ForbiddenException();
-
     }
+  }
 
 
+  const page =
+    pagination?.page ?? 1;
 
 
+  const limit =
+    pagination?.limit ?? 20;
 
-    return this.chats.closeConversation(
+
+  const skip =
+    (page - 1) * limit;
+
+
+  const items =
+    await this.chats.listMessages(
+      conversationId,
+      {
+        skip,
+        take: limit,
+      },
+    );
+
+
+  const total =
+    await this.chats.countMessages(
       conversationId,
     );
 
 
-  }
+  return {
+    items,
+    page,
+    limit,
+    total,
+    pages: Math.ceil(total / limit),
+  };
+}
 
 
 
 
 
-
-
-
-
-  async deleteConversation(
-    userId: string,
-    conversationId: string,
-  ) {
-
-
-
-    const permission =
-      await this.authorization.hasUserPermission(
-        userId,
-        Permission.CHAT_DELETE,
-      );
-
-
-
-    if (!permission) {
-
-      throw new ForbiddenException();
-
-    }
+async markMessageAsRead(
+  userId: string,
+  messageId: string,
+) {
+  return this.chats.markMessageAsRead(
+    messageId,
+    userId,
+  );
+}
 
 
 
 
 
-    return this.chats.deleteConversation(
+async closeConversation(
+  userId: string,
+  conversationId: string,
+) {
+  const owner =
+    await this.chats.isCreator(
+      userId,
       conversationId,
     );
 
 
+  if (!owner) {
+    throw new ForbiddenException();
   }
 
 
+  return this.chats.closeConversation(
+    conversationId,
+  );
+}
 
 
 
 
 
-
-
-  async updateConversation(
-    userId: string,
-    conversationId: string,
-    subject: string,
-  ) {
-
-
-
-    const owner =
-      await this.chats.isCreator(
-        userId,
-        conversationId,
-      );
-
-
-
-    if (!owner) {
-
-      throw new ForbiddenException();
-
-    }
-
-
-
-
-
-    return this.chats.updateConversation(
-      conversationId,
-      subject.trim(),
+async deleteConversation(
+  userId: string,
+  conversationId: string,
+) {
+  const permission =
+    await this.authorization.hasUserPermission(
+      userId,
+      Permission.CHAT_DELETE,
     );
 
 
+  if (!permission) {
+    throw new ForbiddenException();
   }
 
 
+  return this.chats.deleteConversation(
+    conversationId,
+  );
+}
 
 
 
 
 
-
-
-  async listConversations(
-    userId: string,
-    pagination?: PaginationDto,
-  ) {
-
-
-
-    const page =
-      pagination?.page ?? 1;
-
-
-
-    const limit =
-      pagination?.limit ?? 20;
-
-
-
-    const skip =
-      (page - 1) * limit;
-
-
-
-
-
-    const items =
-      await this.chats.listConversationsForUser(
-        userId,
-        {
-          skip,
-          take: limit,
-        },
-      );
-
-
-
-
-
-    const total =
-      await this.chats.countConversationsForUser(
-        userId,
-      );
-
-
-
-
-
-
-    return {
-
-      items,
-
-      page,
-
-      limit,
-
-      total,
-
-      pages:
-        Math.ceil(total / limit),
-
-    };
-
-
-  }
-
-
-
-
-
-
-
-
-
-  async addParticipant(
-    userId: string,
-    conversationId: string,
-    participantId: string,
-  ) {
-
-
-
-    const owner =
-      await this.chats.isCreator(
-        userId,
-        conversationId,
-      );
-
-
-
-    if (!owner) {
-
-      throw new ForbiddenException();
-
-    }
-
-
-
-
-
-    return this.chats.addParticipant(
+async updateConversation(
+  userId: string,
+  conversationId: string,
+  subject: string,
+) {
+  const owner =
+    await this.chats.isCreator(
+      userId,
       conversationId,
-      participantId,
     );
 
 
+  if (!owner) {
+    throw new ForbiddenException();
   }
 
 
+  return this.chats.updateConversation(
+    conversationId,
+    subject.trim(),
+  );
+}
 
+
+
+
+
+async listConversations(
+  userId: string,
+  pagination?: PaginationDto,
+) {
+  const page =
+    pagination?.page ?? 1;
+
+
+  const limit =
+    pagination?.limit ?? 20;
+
+
+  const skip =
+    (page - 1) * limit;
+
+
+  const items =
+    await this.chats.listConversationsForUser(
+      userId,
+      {
+        skip,
+        take: limit,
+      },
+    );
+
+
+  const total =
+    await this.chats.countConversationsForUser(
+      userId,
+    );
+
+
+  return {
+    items,
+    page,
+    limit,
+    total,
+    pages: Math.ceil(total / limit),
+  };
+}
+
+
+
+
+
+async addParticipant(
+  userId: string,
+  conversationId: string,
+  participantId: string,
+) {
+  const owner =
+    await this.chats.isCreator(
+      userId,
+      conversationId,
+    );
+
+
+  if (!owner) {
+    throw new ForbiddenException();
+  }
+
+
+  return this.chats.addParticipant(
+    conversationId,
+    participantId,
+  );
+}
 }

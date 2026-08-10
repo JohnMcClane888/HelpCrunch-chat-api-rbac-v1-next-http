@@ -10,26 +10,57 @@ import { RoleRepository } from './role.repository';
 import { SessionRepository } from './session.repository';
 import { UserRepository } from './user.repository';
 
+import { CHAT_REPOSITORY } from '../../chat/chat.constants';
+
+
 @Global()
 @Module({
-  imports: [PrismaModule],
-  providers: [
-    UserRepository,
-    SessionRepository,
-    RefreshTokenRepository,
-    AuditLogRepository,
-    ChatRepository,
-    RoleRepository,
-    PermissionRepository,
+  imports: [
+    PrismaModule,
   ],
-  exports: [
+
+  providers: [
+
     UserRepository,
+
     SessionRepository,
+
     RefreshTokenRepository,
+
     AuditLogRepository,
-    ChatRepository,
+
+
+    {
+      provide: CHAT_REPOSITORY,
+      useClass: ChatRepository,
+    },
+
+
     RoleRepository,
+
     PermissionRepository,
+
+  ],
+
+
+  exports: [
+
+    UserRepository,
+
+    SessionRepository,
+
+    RefreshTokenRepository,
+
+    AuditLogRepository,
+
+
+    CHAT_REPOSITORY,
+
+
+    RoleRepository,
+
+    PermissionRepository,
+
   ],
 })
 export class RepositoryModule {}
